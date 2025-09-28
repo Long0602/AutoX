@@ -50,12 +50,48 @@ open class UiObject(info: Any?, private val allocator: AccessibilityNodeInfoAllo
     open fun parent(): UiObject? {
         try {
             val parent = super.getParent() ?: return null
-            return UiObject(parent.info, mDepth - 1, -1)
+            // 修复：正确计算父节点在当前节点中的索引
+            val parentIndex = calculateParentIndex(parent)
+            return UiObject(parent.info, mDepth - 1, parentIndex)
         } catch (e: IllegalStateException) {
             // FIXME: 2017/5/5
             return null
         }
 
+    }
+    
+    private fun calculateParentIndex(parent: AccessibilityNodeInfoCompat): Int {
+        // 通过遍历父节点的子节点来找到当前节点在父节点中的索引
+        try {
+            val parentNode = parent.info as? AccessibilityNodeInfo ?: return -1
+            val childCount = parentNode.childCount
+            for (i in 0 until childCount) {
+                val child = parentNode.getChild(i)
+                if (child != null) {
+                    // 比较子节点和当前节点是否相同
+                    if (isSameNode(child, this.info)) {
+                        return i
+                    }
+                    child.recycle()
+                }
+            }
+        } catch (e: Exception) {
+            // 如果无法计算，返回-1
+        }
+        return -1
+    }
+    
+    private fun isSameNode(node1: AccessibilityNodeInfo, node2: Any?): Boolean {
+        if (node2 !is AccessibilityNodeInfo) return false
+        try {
+            // 通过比较关键属性来判断是否为同一个节点
+            return node1.className == node2.className &&
+                   node1.text == node2.text &&
+                   node1.contentDescription == node2.contentDescription &&
+                   node1.viewIdResourceName == node2.viewIdResourceName
+        } catch (e: Exception) {
+            return false
+        }
     }
 
     open fun child(i: Int): UiObject? {
