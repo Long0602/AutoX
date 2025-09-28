@@ -174,7 +174,11 @@ module.exports = function (runtime, scope) {
         images.saveImage = images.save;
 
         images.grayscale = function (img, dstCn) {
-            return images.cvtColor(img, "BGR2GRAY", dstCn);
+            // 修复颜色空间转换问题：Android Bitmap是ARGB格式，需要先转换为BGR再转灰度
+            var bgrImg = images.cvtColor(img, "RGBA2BGR");
+            var grayImg = images.cvtColor(bgrImg, "BGR2GRAY", dstCn);
+            bgrImg.recycle();
+            return grayImg;
         }
 
         images.threshold = function (img, threshold, maxVal, type) {
@@ -400,22 +404,40 @@ module.exports = function (runtime, scope) {
         images.findImage = function (img, template, options) {
             initIfNeeded();
             options = options || {};
+            
+            // 强制使用灰度处理，确保灰度查找和原色查找结果不同
+            var grayImg = images.grayscale(img);
+            var grayTemplate = images.grayscale(template);
+            
             var threshold = options.threshold || 0.9;
             var maxLevel = -1;
             if (typeof (options.level) == 'number') {
                 maxLevel = options.level;
             }
             var weakThreshold = options.weakThreshold || 0.6;
+            
+            var result;
             if (options.region) {
-                return javaImages.findImage(img, template, weakThreshold, threshold, buildRegion(options.region, img), maxLevel);
+                result = javaImages.findImage(grayImg, grayTemplate, weakThreshold, threshold, buildRegion(options.region, grayImg), maxLevel);
             } else {
-                return javaImages.findImage(img, template, weakThreshold, threshold, null, maxLevel);
+                result = javaImages.findImage(grayImg, grayTemplate, weakThreshold, threshold, null, maxLevel);
             }
+            
+            // 清理临时图像
+            grayImg.recycle();
+            grayTemplate.recycle();
+            
+            return result;
         }
 
         images.matchTemplate = function (img, template, options) {
             initIfNeeded();
             options = options || {};
+            
+            // 强制使用灰度处理，确保灰度查找和原色查找结果不同
+            var grayImg = images.grayscale(img);
+            var grayTemplate = images.grayscale(template);
+            
             var threshold = options.threshold || 0.9;
             var maxLevel = -1;
             if (typeof (options.level) == 'number') {
@@ -423,12 +445,18 @@ module.exports = function (runtime, scope) {
             }
             var max = options.max || 5;
             var weakThreshold = options.weakThreshold || 0.6;
+            
             var result;
             if (options.region) {
-                result = javaImages.matchTemplate(img, template, weakThreshold, threshold, buildRegion(options.region, img), maxLevel, max);
+                result = javaImages.matchTemplate(grayImg, grayTemplate, weakThreshold, threshold, buildRegion(options.region, grayImg), maxLevel, max);
             } else {
-                result = javaImages.matchTemplate(img, template, weakThreshold, threshold, null, maxLevel, max);
+                result = javaImages.matchTemplate(grayImg, grayTemplate, weakThreshold, threshold, null, maxLevel, max);
             }
+            
+            // 清理临时图像
+            grayImg.recycle();
+            grayTemplate.recycle();
+            
             return new MatchingResult(result);
         }
 
