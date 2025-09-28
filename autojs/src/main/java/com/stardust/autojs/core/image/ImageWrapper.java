@@ -102,7 +102,15 @@ public class ImageWrapper {
         ensureNotRecycled();
         if (mMat == null && mBitmap != null) {
             mMat = new Mat();
+            // 修复颜色空间转换：Android Bitmap是ARGB格式，需要转换为BGR格式供OpenCV使用
             Utils.bitmapToMat(mBitmap, mMat);
+            // 如果Mat是4通道(RGBA)，转换为3通道(BGR)
+            if (mMat.channels() == 4) {
+                Mat bgrMat = new Mat();
+                org.opencv.imgproc.Imgproc.cvtColor(mMat, bgrMat, org.opencv.imgproc.Imgproc.COLOR_RGBA2BGR);
+                OpenCVHelper.release(mMat);
+                mMat = bgrMat;
+            }
         }
         return mMat;
     }
